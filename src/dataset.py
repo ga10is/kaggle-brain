@@ -74,7 +74,7 @@ alb_val_trnsfms = A.Compose([
 alb_tst_trnsfms = A.Compose([
     A.Resize(*config.IMG_SIZE),
     # A.CLAHE(),
-    A.Resize(*config.TEST_INPUT_SIZE),
+    A.CenterCrop(*config.INPUT_SIZE),
     # NormalizePerImage(),
     A.Normalize(
         mean=[0.485, 0.456, 0.406],

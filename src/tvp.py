@@ -1,4 +1,5 @@
 from tqdm import tqdm
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -10,7 +11,7 @@ from . import config
 from .common.logger import get_logger
 from .common.util import str_stats
 from .helper_func import train_valid_split_v1
-from .dataset import BrainDataset, alb_trn_trnsfms, alb_val_trnsfms
+from .dataset import BrainDataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
 from .model.model import ResNet
 from .model.metrics import AverageMeter
 from .model.loss import FocalLoss, ArcMarginProduct
@@ -138,7 +139,7 @@ def train():
             start_epoch, optimizer, scheduler = reset_opt(model)
 
     get_logger().info('[Start] Training')
-    best_score = 0
+    best_score = 1e+8
     train_history = {'loss': []}
     valid_history = {'loss': []}
     for epoch in range(start_epoch + 1, config.EPOCHS + 1):
@@ -172,8 +173,9 @@ def init_model():
     model = ResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
     # TODO: class weight
+    class_weight = torch.tensor([1., 1., 1., 1., 1., 2.]).to(config.DEVICE)
     # criterion = FocalLoss(gamma=1)
-    criterion = torch.nn.BCEWithLogitsLoss()
+    criterion = torch.nn.BCEWithLogitsLoss(pos_weight=class_weight)
     '''
     optimizer = torch.optim.SGD([{'params': model.parameters()}],
                                 lr=config.SGD_LR,
@@ -210,3 +212,77 @@ def reset_opt(model):
     # model, optimizer = amp.initialize(model, optimizer, opt_level='01')
 
     return start_epoch, optimizer, scheduler
+
+
+def predict():
+    get_logger().info('Setting')
+
+    # Load csv
+    df_test = pd.read_csv(config.TEST_PATH)
+    print(df_test.head())
+    df_submit = pd.read_csv(config.SUBMIT_PATH)
+    print(df_submit.head())
+
+    get_logger().info('test size: %d ' % len(df_test))
+
+    test_dataset = BrainDataset(
+        df_test, config.TEST_IMG_PATH, alb_tst_trnsfms, mode='predict')
+    test_loader = DataLoader(test_dataset,
+                             batch_size=config.BATCH_SIZE_TEST,
+                             num_workers=config.NUM_WORKERS,
+                             pin_memory=True,
+                             drop_last=False,
+                             shuffle=False
+                             )
+
+    model, criterion, optimizer, scheduler = init_model()
+    start_epoch = 0
+
+    get_logger().info('predict with pretrained model: %s' % config.PRETRAIN_PATH)
+    # load
+    start_epoch, model, optimizer, scheduler, _ = load_checkpoint(
+        model, optimizer, scheduler, config.PRETRAIN_PATH)
+
+    get_logger().info('[Start] Predicting')
+    preds = predict_labels(model, test_loader)
+
+    df_submit = make_submit(df_submit, preds)
+    print(df_submit.head())
+    df_submit.to_csv('submission.csv', index=False)
+
+
+def predict_labels(model, loader):
+    """
+    predict labels
+
+    Returns
+    -------
+    nd.array, shape of (n_samples, 6)
+    """
+    preds = []
+
+    model.eval()
+    for i, data in enumerate(tqdm(loader)):
+        img, _ = data
+        with torch.no_grad():
+            if not config.RUN_TTA:
+                img = img.to(config.DEVICE)
+                logit = model(img)
+                prob = torch.sigmoid(logit)
+            else:
+                raise NotImplementedError
+
+        prob = prob.detach().cpu().numpy().reshape(-1)
+        preds.append(prob)
+
+    preds = np.concatenate(preds)
+    return preds
+
+
+def make_submit(df, preds):
+    """
+    make submission dataframe from submission sample and prediction
+    """
+    df.drop('Label', axis=1, inplace=True)
+    df['Label'] = preds
+    return df

@@ -7,7 +7,8 @@ TEST_INPUT_SIZE = (382, 382)  # (1024, 1024)
 
 INPUT = './data/'
 TRAIN_PATH = os.path.join(INPUT, 'df_train.csv')
-TEST_PATH = os.path.join(INPUT, 'stage_1_sample_submission.csv')
+TEST_PATH = os.path.join(INPUT, 'df_test.csv')
+SUBMIT_PATH = os.path.join(INPUT, 'stage_1_sample_submission.csv')
 TRAIN_IMG_PATH = os.path.join(INPUT, 'data_512', 'stage_1_train_images_jpg')
 TEST_IMG_PATH = os.path.join(INPUT, 'data_512', 'stage_1_test_images_jpg')
 
@@ -18,7 +19,7 @@ N_SAMPLES = 7000
 RUN_TTA = False
 
 
-VALID_RATIO = 0.15
+VALID_RATIO = 0.10
 BATCH_SIZE_TRAIN = 128
 BATCH_SIZE_TEST = 128
 NUM_WORKERS = 8
@@ -35,7 +36,7 @@ WEIGHT_DECAY = 1e-4
 
 USE_PRETRAINED = False
 RESET_OPT = False
-PRETRAIN_PATH = '/root/user/recursion/models/comp_seres50/huvec/001/best_model.pth'
+PRETRAIN_PATH = './models/resnet34/001/best_model.pth'
 
 DROPOUT_RATE = 0.2
 LATENT_DIM = 512
