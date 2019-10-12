@@ -48,13 +48,14 @@ alb_trn_trnsfms = A.Compose([
     # A.RandomSizedCrop((IMG_SIZE[0]-32, IMG_SIZE[0]-10), *INPUT_SIZE),
     A.RandomCrop(*config.INPUT_SIZE),
     # A.HueSaturationValue(val_shift_limit=20, p=0.5),
-    # A.RandomBrightnessContrast(),
-    # A.Resize(*INPUT_SIZE),
-    # NormalizePerImage(),
-    A.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225],
-    ),
+    A.HorizontalFlip(p=0.5),
+    A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2),
+    A.GaussianBlur(blur_limit=7, p=0.5),
+    NormalizePerImage(),
+    # A.Normalize(
+    # mean=[0.485, 0.456, 0.406],
+    # std=[0.229, 0.224, 0.225],
+    # ),
     ATorch.transforms.ToTensor()
 ], p=1)
 
@@ -63,11 +64,11 @@ alb_val_trnsfms = A.Compose([
     A.Resize(*config.IMG_SIZE),
     # A.CLAHE(p=1),
     A.CenterCrop(*config.INPUT_SIZE),
-    # NormalizePerImage(),
-    A.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225],
-    ),
+    NormalizePerImage(),
+    # A.Normalize(
+    # mean=[0.485, 0.456, 0.406],
+    # std=[0.229, 0.224, 0.225],
+    # ),
     ATorch.transforms.ToTensor()
 ], p=1)
 
@@ -75,11 +76,11 @@ alb_tst_trnsfms = A.Compose([
     A.Resize(*config.IMG_SIZE),
     # A.CLAHE(),
     A.CenterCrop(*config.INPUT_SIZE),
-    # NormalizePerImage(),
-    A.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225],
-    ),
+    NormalizePerImage(),
+    # A.Normalize(
+    # mean=[0.485, 0.456, 0.406],
+    # std=[0.229, 0.224, 0.225],
+    # ),
     ATorch.transforms.ToTensor()
 ], p=1)
 
@@ -170,6 +171,8 @@ class BrainDataset(Dataset):
 
         df_new = pd.DataFrame({self.id_name: selected})
         df_new = df_new.merge(self.df_org, on=self.id_name, how='left')
+        # shuffle
+        df_new = df_new.sample(frac=1, random_state=2019)
         get_logger().info('num of selected_images: %d' % len(df_new))
 
         return df_new

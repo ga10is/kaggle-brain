@@ -12,7 +12,7 @@ from .common.logger import get_logger
 from .common.util import str_stats
 from .helper_func import train_valid_split_v1
 from .dataset import BrainDataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
-from .model.model import ResNet
+from .model.model import ResNet, HighResNet, HighSEResNeXt
 from .model.metrics import AverageMeter
 from .model.loss import FocalLoss, ArcMarginProduct
 from .model.model_util import load_checkpoint, save_checkpoint
@@ -29,6 +29,20 @@ def train_one_epoch(epoch,
     get_logger().info('lr: %f' %
                       optimizer.state_dict()['param_groups'][0]['lr'])
     loader.dataset.update()
+
+    if epoch < 5:
+        get_logger().info('freeze model parameter')
+        # freeze pretrained layers
+        for name, child in model.named_children():
+            if name in ['feature']:
+                for param in child.parameters():
+                    param.requires_grad = False
+    elif epoch == 5:
+        get_logger().info('unfreeze model parameter')
+        for name, child in model.named_children():
+            for param in child.parameters():
+                param.requires_grad = True
+
     # train phase
     model.train()
     for i, data in enumerate(tqdm(loader)):
@@ -37,13 +51,9 @@ def train_one_epoch(epoch,
         label = label.to(config.DEVICE, dtype=torch.float)
 
         with torch.set_grad_enabled(True):
-            if epoch < 5:
-                # freeze pretrained layers
-                for name, child in model.named_children():
-                    if name in ['layer0', 'layer1', 'layer2', 'layer3', 'layer4']:
-                        for param in child.parameters():
-                            param.requires_grad = False
+
             logit = model(img)
+            # print(logit.size())
             loss = criterion(logit, label)
 
             # backward
@@ -59,14 +69,14 @@ def train_one_epoch(epoch,
         if i % config.PRINT_FREQ == 0:
             logit_cpu = logit.detach().cpu()
             get_logger().info('\n' + str_stats(logit_cpu[0].numpy()))
-            softmaxed = F.softmax(logit_cpu, dim=1)
-            get_logger().info('\n' + str_stats(softmaxed[0].numpy()))
+            prob = torch.sigmoid(logit_cpu)
+            get_logger().info('\n' + str_stats(prob[0].numpy()))
             get_logger().info('train: %d loss: %f (just now)' % (i, loss_meter.val))
             get_logger().info('train: %d loss: %f' % (i, loss_meter.avg))
 
     get_logger().info("Epoch %d/%d train loss %f" %
                       (epoch, config.EPOCHS, loss_meter.avg))
-
+    get_logger().info('GeM p: %f' % model.gem.p.item())
     return loss_meter.avg
 
 
@@ -99,11 +109,16 @@ def train():
     get_logger().info('Setting')
 
     # Load csv
-    df_train = pd.read_csv(config.TRAIN_PATH)
-    print(df_train.head())
+    df_trn = pd.read_csv(config.TRAIN_PATH)
+    df_val = pd.read_csv(config.VALID_PATH)
 
-    df_trn, df_val = train_valid_split_v1(
-        df_train, valid_ratio=config.VALID_RATIO)
+    # visualization train set
+    print(df_trn.head())
+
+    # visualization validate set
+    print(df_val.head())
+
+    # data information
     get_logger().info('train size: %d valid size: %d' % (len(df_trn), len(df_val)))
     get_logger().info('train positive ratio: %f valid positive ratio: %f' %
                       (df_trn['any'].mean(), df_val['any'].mean()))
@@ -145,22 +160,23 @@ def train():
     for epoch in range(start_epoch + 1, config.EPOCHS + 1):
         train_loss = train_one_epoch(
             epoch, model, train_loader, criterion, optimizer)
-        valid_loss = validate_one_epoch(
-            epoch, model, valid_loader, criterion)
-
         train_history['loss'].append(train_loss)
-        valid_history['loss'].append(valid_loss)
 
-        is_best = valid_loss < best_score
-        if is_best:
-            best_score = valid_loss
-        get_logger().info('best score (%f) at epoch (%d)' % (best_score, epoch))
-        save_checkpoint({
-            'epoch': epoch,
-            'state_dict': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'scheduler': scheduler.state_dict(),
-        }, is_best)
+        if epoch % 1 == 0:
+            valid_loss = validate_one_epoch(
+                epoch, model, valid_loader, criterion)
+            valid_history['loss'].append(valid_loss)
+
+            is_best = valid_loss < best_score
+            if is_best:
+                best_score = valid_loss
+            get_logger().info('best score (%f) at epoch (%d)' % (best_score, epoch))
+            save_checkpoint({
+                'epoch': epoch,
+                'state_dict': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'scheduler': scheduler.state_dict(),
+            }, is_best)
         # move scheduler.step to here
         scheduler.step()
 
@@ -170,9 +186,9 @@ def train():
 def init_model():
     torch.backends.cudnn.benchmark = True
     get_logger().info('Initializing classification model...')
-    model = ResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    # model = HighResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
-    # TODO: class weight
     class_weight = torch.tensor([1., 1., 1., 1., 1., 2.]).to(config.DEVICE)
     # criterion = FocalLoss(gamma=1)
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=class_weight)
@@ -242,6 +258,7 @@ def predict():
     # load
     start_epoch, model, optimizer, scheduler, _ = load_checkpoint(
         model, optimizer, scheduler, config.PRETRAIN_PATH)
+    get_logger().info('Predicting with loaded model(epoch: %d)' % start_epoch)
 
     get_logger().info('[Start] Predicting')
     preds = predict_labels(model, test_loader)

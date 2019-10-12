@@ -40,56 +40,91 @@ class ResNet(nn.Module):
         return x
 
 
-class SEResNet(nn.Module):
-    def __init__(self, dropout_rate, latent_dim):
-        # def __init__(self, dropout_rate, latent_dim, temperature, m):
-        super(SEResNet, self).__init__()
+def gem(x, p, eps):
+    x = F.adaptive_avg_pool2d(x.clamp(min=eps).pow(p), (1, 1)).pow(1. / p)
+    return x
 
-        senet = pretrainedmodels.__dict__['se_resnext50_32x4d'](
-            num_classes=1000, pretrained='imagenet')
-        self.layer0 = senet.layer0
-        self.layer1 = senet.layer1
-        self.layer2 = senet.layer2
-        self.layer3 = senet.layer3
-        self.layer4 = senet.layer4
 
-        n_out_channels = 2048
+class GeM(nn.Module):
+
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM, self).__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x):
+        return gem(x, p=self.p, eps=self.eps)
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(' + 'p=' + '{:.4f}'.format(self.p.data.tolist()[0]) + ', ' + 'eps=' + str(self.eps) + ')'
+
+
+class HighResNet(nn.Module):
+    def __init__(self, dropout_rate):
+        super(HighResNet, self).__init__()
+        # self.resnet = torchvision.models.resnet50(pretrained=True)
+        resnet = torchvision.models.resnet34(pretrained=True)
+        # self.resnet = torchvision.models.resnet18(pretrained=True)
+
+        self.feature = nn.Sequential(
+            resnet.conv1,
+            resnet.bn1,
+            resnet.relu,
+            resnet.maxpool,
+            resnet.layer1,
+            resnet.layer2,
+            resnet.layer3,
+        )
+        n_out_channels = 256
+
+        # GeM
+        self.gem = GeM(p=3)
+
         # FC
         self.fc = nn.Linear(n_out_channels, 6)
 
     def forward(self, x, label=None):
-        x = self.layer0(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x = self.feature(x)
 
-        # GAP
+        # GeM
         x = F.relu(x)
-        x = F.adaptive_avg_pool2d(x, (1, 1))
+        x = self.gem(x)
         x = x.view(x.size(0), -1)
-        # FC
+
         x = self.fc(x)
 
         return x
 
 
-class CompareNet(nn.Module):
-    def __init__(self, dropout_rate, latent_dim):
-        super(CompareNet, self).__init__()
+class HighSEResNeXt(nn.Module):
+    def __init__(self, dropout_rate):
+        super(HighSEResNeXt, self).__init__()
 
-        self.net = SEResNet(dropout_rate, latent_dim)
-        self.head = nn.Sequential(
-            nn.BatchNorm1d(2 * latent_dim),
-            nn.ReLU(),
-            nn.Linear(2 * latent_dim, latent_dim)
+        senet = pretrainedmodels.__dict__['se_resnext50_32x4d'](
+            num_classes=1000, pretrained='imagenet')
+        # remove layer4
+        self.feature = nn.Sequential(
+            senet.layer0,
+            senet.layer1,
+            senet.layer2,
+            senet.layer3
         )
+        n_out_channels = 1024
 
-    def forward(self, x1, x2):
-        x1 = self.net(x1)
-        x2 = self.net(x2)
+        # GeM
+        self.gem = GeM(p=3.5)
 
-        x = torch.cat([x1, x2], dim=1)
-        x = self.head(x)
+        # FC
+        self.fc = nn.Linear(n_out_channels, 6)
+
+    def forward(self, x, label=None):
+        x = self.feature(x)
+
+        # GeM
+        x = F.relu(x)
+        x = self.gem(x)
+        x = x.view(x.size(0), -1)
+        # FC
+        x = self.fc(x)
 
         return x
