@@ -30,14 +30,14 @@ def train_one_epoch(epoch,
                       optimizer.state_dict()['param_groups'][0]['lr'])
     loader.dataset.update()
 
-    if epoch < 5:
+    if epoch < config.FREEZE_EPOCH:
         get_logger().info('freeze model parameter')
         # freeze pretrained layers
         for name, child in model.named_children():
             if name in ['feature']:
                 for param in child.parameters():
                     param.requires_grad = False
-    elif epoch == 5:
+    elif epoch == config.FREEZE_EPOCH:
         get_logger().info('unfreeze model parameter')
         for name, child in model.named_children():
             for param in child.parameters():
@@ -135,7 +135,7 @@ def train():
     valid_dataset = BrainDataset(
         df_val, config.TRAIN_IMG_PATH, alb_val_trnsfms, mode='valid')
     valid_loader = DataLoader(valid_dataset,
-                              batch_size=config.BATCH_SIZE_TRAIN,
+                              batch_size=config.BATCH_SIZE_TEST,
                               num_workers=config.NUM_WORKERS,
                               pin_memory=True,
                               drop_last=False,

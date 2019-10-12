@@ -16,7 +16,7 @@ TEST_IMG_PATH = os.path.join(INPUT, 'data_512', 'stage_1_test_images_jpg')
 DEVICE = torch.device("cuda:0")
 
 N_CLASSES = 2
-N_SAMPLES = 7800
+N_SAMPLES = 20000
 RUN_TTA = False
 
 
@@ -24,7 +24,7 @@ VALID_RATIO = 0.10
 BATCH_SIZE_TRAIN = 32
 BATCH_SIZE_TEST = 128
 NUM_WORKERS = 8
-PRINT_FREQ = 20
+PRINT_FREQ = 50
 ITER_PER_CYCLE = 30
 EPOCHS = ITER_PER_CYCLE * 4
 # EPOCHS = 200
@@ -35,9 +35,10 @@ MIN_LR = 1e-3
 MOMENTUM = 0.9
 WEIGHT_DECAY = 1e-4
 
+FREEZE_EPOCH = 2
 USE_PRETRAINED = False
 RESET_OPT = False
-PRETRAIN_PATH = './models/seres50/002/best_model.pth'
+PRETRAIN_PATH = './models/seres50/003/best_model.pth'
 
 DROPOUT_RATE = 0.2
 LATENT_DIM = 512
