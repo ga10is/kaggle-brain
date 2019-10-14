@@ -2,8 +2,12 @@ import math
 import numpy as np
 import pandas as pd
 import torch
-# import matplotlib.pylab as plt
-# import seaborn as sns
+
+try:
+    import matplotlib.pylab as plt
+    import seaborn as sns
+except ImportError:
+    print('Unable import matplotlib and seaborn')
 
 
 def save_checkpoint(state, is_best, fpath='checkpoint.pth'):

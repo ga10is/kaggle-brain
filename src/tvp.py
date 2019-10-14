@@ -14,8 +14,8 @@ from .helper_func import train_valid_split_v1
 from .dataset import BrainDataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
 from .model.model import ResNet, HighResNet, HighSEResNeXt
 from .model.metrics import AverageMeter
-from .model.loss import FocalLoss, ArcMarginProduct
-from .model.model_util import load_checkpoint, save_checkpoint
+from .model.loss import FocalLoss, ArcMarginProduct, WeightedBCE
+from .model.model_util import load_checkpoint, save_checkpoint, plot_grad_flow
 
 
 def train_one_epoch(epoch,
@@ -60,6 +60,10 @@ def train_one_epoch(epoch,
             # with amp.scale_loss(loss, optimizer) as scaled_loss:
             # scaled_loss.backward()
             loss.backward()
+            if config.VIZ_GRAD and i % config.PRINT_FREQ == 0:
+                # visualize grad
+                plot_grad_flow(model.named_parameters())
+
             optimizer.step()
             optimizer.zero_grad()
 
@@ -99,6 +103,14 @@ def validate_one_epoch(epoch,
             loss_meter.update(loss.item(), img.size(0))
             loss_meter.update(0, img.size(0))
 
+        # print
+        if i % config.PRINT_FREQ == 0:
+            logit_cpu = logit.detach().cpu()
+            get_logger().info('\n' + str_stats(logit_cpu[0].numpy()))
+            prob = torch.sigmoid(logit_cpu)
+            get_logger().info('\n' + str_stats(prob[0].numpy()))
+            get_logger().info('vlaid: %d loss: %f (just now)' % (i, loss_meter.val))
+            get_logger().info('valid: %d loss: %f' % (i, loss_meter.avg))
     get_logger().info("Epoch %d/%d valid loss %f" %
                       (epoch, config.EPOCHS, loss_meter.avg))
 
@@ -189,9 +201,9 @@ def init_model():
     # model = HighResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
     model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
-    class_weight = torch.tensor([1., 1., 1., 1., 1., 2.]).to(config.DEVICE)
-    # criterion = FocalLoss(gamma=1)
-    criterion = torch.nn.BCEWithLogitsLoss(pos_weight=class_weight)
+    label_weight = torch.tensor([1., 1., 1., 1., 1., 2.]).to(config.DEVICE)
+    criterion = WeightedBCE(label_weight)
+    # criterion = torch.nn.BCEWithLogitsLoss()
     '''
     optimizer = torch.optim.SGD([{'params': model.parameters()}],
                                 lr=config.SGD_LR,

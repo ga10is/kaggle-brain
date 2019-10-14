@@ -94,3 +94,26 @@ class FocalLoss(nn.Module):
         p = torch.exp(-logp)
         loss = (1 - p) ** self.gamma * logp
         return loss.mean()
+
+
+class WeightedBCE(nn.Module):
+    def __init__(self, label_weight):
+        """
+        Initialize instance
+
+        Parameters
+        ----------
+        label_weight: torch.Tensor, size of [n_labels]
+            weight of labels
+        """
+        super(WeightedBCE, self).__init__()
+        self.bce = torch.nn.BCEWithLogitsLoss(reduction='none')
+        self.label_weight = label_weight
+
+    def forward(self, input, target):
+        # loss size: [n_batches, n_labels]
+        loss = self.bce(input, target)
+        # w_loss size: [n_batches]
+        w_loss = torch.mv(loss, self.label_weight)
+
+        return w_loss.mean()

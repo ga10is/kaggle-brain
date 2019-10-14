@@ -33,6 +33,6 @@ def transform_df():
 if __name__ == '__main__':
     create_logger('log/brain.log')
 
-    # train()
+    train()
     # predict()
-    save_split_data()
+    # save_split_data()
