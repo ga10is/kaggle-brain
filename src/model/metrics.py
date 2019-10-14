@@ -1,3 +1,5 @@
+import numpy as np
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -32,3 +34,18 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
+
+def weighted_log_loss_metric(trues, preds):
+    """
+    Will be used to calculate the log loss
+    """
+    class_weights = [1., 1., 1., 1., 1., 2.]
+
+    epsilon = 1e-15
+
+    preds = np.clip(preds, epsilon, 1 - epsilon)
+    loss = trues * np.log(preds) + (1 - trues) * np.log(1 - preds)
+    loss_samples = np.average(loss, axis=1, weights=class_weights)
+
+    return - loss_samples.mean()

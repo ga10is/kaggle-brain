@@ -114,6 +114,9 @@ class WeightedBCE(nn.Module):
         # loss size: [n_batches, n_labels]
         loss = self.bce(input, target)
         # w_loss size: [n_batches]
-        w_loss = torch.mv(loss, self.label_weight)
+        # w_loss = torch.mv(loss, self.label_weight)
 
-        return w_loss.mean()
+        # loss * label_weight size: [n_batches, n_labels] -> [n_batches]
+        w_loss2 = (loss * self.label_weight).sum(dim=1)
+
+        return w_loss2.mean()

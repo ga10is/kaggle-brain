@@ -112,7 +112,7 @@ class HighSEResNeXt(nn.Module):
         n_out_channels = 1024
 
         # GeM
-        self.gem = GeM(p=3.5)
+        self.gem = GeM(p=3.1)
 
         # FC
         self.fc = nn.Linear(n_out_channels, 6)

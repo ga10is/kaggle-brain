@@ -13,7 +13,7 @@ from .common.util import str_stats
 from .helper_func import train_valid_split_v1
 from .dataset import BrainDataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
 from .model.model import ResNet, HighResNet, HighSEResNeXt
-from .model.metrics import AverageMeter
+from .model.metrics import AverageMeter, weighted_log_loss_metric
 from .model.loss import FocalLoss, ArcMarginProduct, WeightedBCE
 from .model.model_util import load_checkpoint, save_checkpoint, plot_grad_flow
 
@@ -89,6 +89,7 @@ def validate_one_epoch(epoch,
                        loader,
                        criterion):
     loss_meter = AverageMeter()
+    log_loss_meter = AverageMeter()
 
     # validate phase
     model.eval()
@@ -101,7 +102,11 @@ def validate_one_epoch(epoch,
 
             loss = criterion(logit, label)
             loss_meter.update(loss.item(), img.size(0))
-            loss_meter.update(0, img.size(0))
+
+            prob_np = torch.sigmoid(logit.detach().cpu()).numpy()
+            label_np = label.detach().cpu().numpy()
+            log_loss = weighted_log_loss_metric(label_np, prob_np)
+            log_loss_meter.update(log_loss, img.size(0))
 
         # print
         if i % config.PRINT_FREQ == 0:
@@ -109,16 +114,19 @@ def validate_one_epoch(epoch,
             get_logger().info('\n' + str_stats(logit_cpu[0].numpy()))
             prob = torch.sigmoid(logit_cpu)
             get_logger().info('\n' + str_stats(prob[0].numpy()))
-            get_logger().info('vlaid: %d loss: %f (just now)' % (i, loss_meter.val))
-            get_logger().info('valid: %d loss: %f' % (i, loss_meter.avg))
-    get_logger().info("Epoch %d/%d valid loss %f" %
-                      (epoch, config.EPOCHS, loss_meter.avg))
+            get_logger().info('vlaid: %d loss: %f metric: %f (just now)' %
+                              (i, loss_meter.val, log_loss_meter.val))
+            get_logger().info('valid: %d loss: %f metric: %f' %
+                              (i, loss_meter.avg, log_loss_meter.avg))
+    get_logger().info("Epoch %d/%d valid loss %f valid metric %f" %
+                      (epoch, config.EPOCHS, loss_meter.avg, log_loss_meter.avg))
 
-    return loss_meter.avg
+    return log_loss_meter.avg
 
 
 def train():
     get_logger().info('Setting')
+    get_logger().info('Image size: %s' % str(config.IMG_SIZE))
 
     # Load csv
     df_trn = pd.read_csv(config.TRAIN_PATH)
@@ -201,7 +209,7 @@ def init_model():
     # model = HighResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
     model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
-    label_weight = torch.tensor([1., 1., 1., 1., 1., 2.]).to(config.DEVICE)
+    label_weight = torch.tensor([1, 1, 1, 1, 1, 2]).to(config.DEVICE, dtype=torch.float)
     criterion = WeightedBCE(label_weight)
     # criterion = torch.nn.BCEWithLogitsLoss()
     '''
