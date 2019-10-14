@@ -29,7 +29,7 @@ ITER_PER_CYCLE = 30
 EPOCHS = ITER_PER_CYCLE * 4
 # EPOCHS = 200
 
-ADAM_LR = 1e-4
+ADAM_LR = 1e-5
 SGD_LR = 1e-2
 MIN_LR = 1e-3
 MOMENTUM = 0.9
@@ -37,8 +37,8 @@ WEIGHT_DECAY = 1e-4
 
 FREEZE_EPOCH = 2
 USE_PRETRAINED = True
-RESET_OPT = False
-PRETRAIN_PATH = './models/data224/seres50/001/best_model.pth'
+RESET_OPT = True
+PRETRAIN_PATH = './models/data224/seres50/003/best_model.pth'
 
 DROPOUT_RATE = 0.2
 LATENT_DIM = 512

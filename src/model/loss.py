@@ -107,16 +107,22 @@ class WeightedBCE(nn.Module):
             weight of labels
         """
         super(WeightedBCE, self).__init__()
-        self.bce = torch.nn.BCEWithLogitsLoss(reduction='none')
+        # self.bce = torch.nn.BCEWithLogitsLoss(reduction='none')
         self.label_weight = label_weight
 
     def forward(self, input, target):
         # loss size: [n_batches, n_labels]
-        loss = self.bce(input, target)
+        # loss = self.bce(input, target)
         # w_loss size: [n_batches]
         # w_loss = torch.mv(loss, self.label_weight)
+        eps = 1e-15
+        prob = torch.sigmoid(input)
+        prob = prob.clamp(min=eps, max=1 - eps)
+        loss = F.binary_cross_entropy(prob, target, reduction='none')
 
         # loss * label_weight size: [n_batches, n_labels] -> [n_batches]
-        w_loss2 = (loss * self.label_weight).sum(dim=1)
+        # label_weight.sum() = 7
+        w_loss2 = (loss * self.label_weight).sum(dim=1) / \
+            self.label_weight.sum()
 
         return w_loss2.mean()
