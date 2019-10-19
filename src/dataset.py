@@ -10,6 +10,7 @@ from albumentations import ImageOnlyTransform
 
 import torch
 from torch.utils.data import Dataset
+import jpeg4py
 
 from . import config
 from .common.logger import get_logger
@@ -144,7 +145,8 @@ class BrainDataset(Dataset):
         image_path: str
             image file path
         """
-        image = cv2.imread(image_path)
+        # image = cv2.imread(image_path)
+        image = jpeg4py.JPEG(image_path).decode()
         # load image as 1 channel
         # image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         # to 3 channels

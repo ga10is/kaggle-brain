@@ -82,6 +82,20 @@ class FocalBinaryLoss(nn.Module):
         return loss
 
 
+class BinaryFocalLoss(nn.Module):
+    def __init__(self, gamma=2, alpha=1):
+        super(BinaryFocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+
+    def forward(self, input, target):
+        BCE_loss = F.binary_cross_entropy_with_logits(
+            input, target, reduction='none')
+        pt = torch.exp(-BCE_loss)  # prevents nans when probability 0
+        focal_loss = self.alpha * (1 - pt)**self.gamma * BCE_loss
+        return focal_loss.mean()
+
+
 class FocalLoss(nn.Module):
     def __init__(self, gamma=0, eps=1e-7):
         super(FocalLoss, self).__init__()
@@ -126,3 +140,17 @@ class WeightedBCE(nn.Module):
             self.label_weight.sum()
 
         return w_loss2.mean()
+
+
+class FocalBCELoss(nn.Module):
+    def __init__(self, bce_weight, label_weight, gamma=2):
+        super(FocalBCELoss, self).__init__()
+        self.focal = BinaryFocalLoss(gamma=gamma)
+        self.bce = WeightedBCE(label_weight)
+        self.bce_w = bce_weight
+
+    def forward(self, input, target):
+        alpha = self.bce_w
+        loss = alpha * self.bce(input, target) + \
+            (1 - alpha) * self.focal(input, target)
+        return loss
