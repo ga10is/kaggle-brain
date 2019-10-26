@@ -100,7 +100,8 @@ class BrainDataset(Dataset):
 
         # Random Selection
         if mode == 'train':
-            self.update()
+            # self.update()
+            self.df_selected = self.df_org
         elif mode in ['valid', 'predict']:
             self.df_selected = self.df_org
         else:
@@ -110,9 +111,9 @@ class BrainDataset(Dataset):
         return self.df_selected.shape[0]
 
     def __getitem__(self, idx):
-        image_name = self.__get_image_name(self.df_selected, idx)
+        image_name = self._get_image_name(self.df_selected, idx)
         try:
-            image = self.__load_image(image_name)
+            image = self._load_image(image_name)
         except Exception as e:
             raise ValueError('Could not load image: %s' % image_name) from e
 
@@ -122,7 +123,7 @@ class BrainDataset(Dataset):
             label = -1
         return image, torch.tensor(label)
 
-    def __get_image_name(self, df, idx):
+    def _get_image_name(self, df, idx):
         """
         get image name
 
@@ -138,7 +139,7 @@ class BrainDataset(Dataset):
         file_path = os.path.join(self.image_dir, file_name)
         return file_path
 
-    def __load_image(self, image_path):
+    def _load_image(self, image_path):
         """
         Parameters
         ----------
@@ -178,3 +179,32 @@ class BrainDataset(Dataset):
         get_logger().info('num of selected_images: %d' % len(df_new))
 
         return df_new
+
+
+class BrainTTADataset(BrainDataset):
+    def __init__(self, df, image_dir, transform, mode, n_tta):
+        super(BrainDataset, self).__init__(
+            df, image_dir, transform, mode
+        )
+        self.n_tta = n_tta
+
+    def __getitem__(self, idx):
+        """
+        Return augmented images and labe(-1)
+        """
+        image_path = self._get_image_name(self.df_selected, idx)
+        try:
+            image = jpeg4py.JPEG(image_path).decode()
+            images = []
+            for _ in range(self.n_tta):
+                image_new = image.copy()
+                augmented = self.transform(image=image_new)
+                image_new = augmented['image']
+                images.append(image_new)
+
+        except Exception as e:
+            raise ValueError('Could not load image: %s' % image_path) from e
+
+        label = -1
+
+        return images, torch.tensor(label)

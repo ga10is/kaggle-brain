@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import pretrainedmodels
 
 from .. import config
-from .loss import ArcMarginProduct
 
 
 class ResNet(nn.Module):
@@ -83,7 +82,7 @@ class HighResNet(nn.Module):
         # FC
         self.fc = nn.Linear(n_out_channels, 6)
 
-    def forward(self, x, label=None):
+    def forward(self, x):
         x = self.feature(x)
 
         # GeM
@@ -107,17 +106,22 @@ class HighSEResNeXt(nn.Module):
             senet.layer0,
             senet.layer1,
             senet.layer2,
-            senet.layer3
+            senet.layer3,
         )
         n_out_channels = 1024
 
         # GeM
-        self.gem = GeM(p=3.1)
+        self.gem = GeM(p=3.0)
 
         # FC
-        self.fc = nn.Linear(n_out_channels, 6)
+        self.last_layer = nn.Sequential(
+            nn.Linear(n_out_channels, n_out_channels),
+            # nn.BatchNorm1d(n_out_channels),
+            # nn.ReLU(),
+            nn.Linear(n_out_channels, 6)
+        )
 
-    def forward(self, x, label=None):
+    def forward(self, x):
         x = self.feature(x)
 
         # GeM
@@ -125,6 +129,6 @@ class HighSEResNeXt(nn.Module):
         x = self.gem(x)
         x = x.view(x.size(0), -1)
         # FC
-        x = self.fc(x)
+        x = self.last_layer(x)
 
         return x

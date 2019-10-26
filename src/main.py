@@ -1,3 +1,5 @@
+import argparse
+
 import pandas as pd
 
 from .common.logger import create_logger
@@ -33,6 +35,14 @@ def transform_df():
 if __name__ == '__main__':
     create_logger('log/brain.log')
 
-    train()
-    # predict()
-    # save_split_data()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('mode', choices=['train', 'predict'])
+
+    args = parser.parse_args()
+
+    mode = args.mode
+    if mode == 'train':
+        train()
+    elif mode == 'predict':
+        predict()

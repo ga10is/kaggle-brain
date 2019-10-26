@@ -30,13 +30,17 @@ def get_windowing(data):
 
 
 def window_image(img, window_center, window_width, intercept, slope):
-
     img = (img * slope + intercept)
     img_min = window_center - window_width // 2
     img_max = window_center + window_width // 2
     img[img < img_min] = img_min
     img[img > img_max] = img_max
-    return img
+
+    img_float32 = img.astype(np.float32)
+    # normalize image between 0.0 to 255.0
+    img_float32 = (img_float32 - img_min) / (img_max - img_min) * 255
+    img_uint8 = img_float32.astype(np.uint8)
+    return img_uint8
 
 
 def download_dicom(file_path, out_dir):
@@ -59,7 +63,7 @@ def download_dicom(file_path, out_dir):
             windowed_images.append(image_windowed)
         windowed_images = np.stack(windowed_images, axis=2)
 
-        cv2.imwrite(out_file_path, image_windowed)
+        cv2.imwrite(out_file_path, windowed_images)
 
         return True
     except Exception as e:
@@ -73,13 +77,15 @@ def download_wrapper(params):
 
 
 def multi_download():
-    dir_path = './data/raw/stage_1_train_images/'
+    dir_path = './data/raw/stage_1_test_images/'
     file_names = os.listdir(dir_path)
-    out_dir = './data/data_512/stage_1_train_images'
+    out_dir = './data/data_512_v2/stage_1_test_images_v2'
     arg_list = [(os.path.join(dir_path, file_name), out_dir)
                 for file_name in file_names]
 
     n_processes = multiprocessing.cpu_count()
+    # ctx = multiprocessing.get_context('spawn')
+    # with ctx.Pool(...)
     with Pool(processes=n_processes) as pool:
 
         imap_iter = pool.imap_unordered(download_wrapper, arg_list)
@@ -93,5 +99,5 @@ if __name__ == '__main__':
     # file_paths = os.listdir('./data/raw/stage_1_test_images/')
     # print(len(file_paths))
     multi_download()
-    # file_path = './data/raw/stage_1_test_images/ID_002bba5e9.dcm'
-    # download_dicom(file_path, out_dir='./data/data_512/stage_1_test_images/')
+    # file_path = './data/raw/stage_1_train_images/ID_0007d9aba.dcm'
+    # download_dicom(file_path, out_dir='./')

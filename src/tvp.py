@@ -5,17 +5,39 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 from torch.utils.data import DataLoader
-# from apex import amp
+from apex import amp
 
 from . import config
 from .common.logger import get_logger
 from .common.util import str_stats
 from .helper_func import train_valid_split_v1
-from .dataset import BrainDataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
+from .dataset import BrainDataset, BrainTTADataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
 from .model.model import ResNet, HighResNet, HighSEResNeXt
 from .model.metrics import AverageMeter, weighted_log_loss_metric
-from .model.loss import FocalLoss, ArcMarginProduct, WeightedBCE
+from .model.loss import WeightedBCE, FocalBCELoss
 from .model.model_util import load_checkpoint, save_checkpoint, plot_grad_flow
+
+
+def mixup_data(x, y, alpha=1.0, use_cuda=True):
+    '''Returns mixed inputs, pairs of targets, and lambda'''
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+
+    batch_size = x.size()[0]
+    if use_cuda:
+        index = torch.randperm(batch_size).cuda()
+    else:
+        index = torch.randperm(batch_size)
+
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 
 def train_one_epoch(epoch,
@@ -28,7 +50,7 @@ def train_one_epoch(epoch,
     get_logger().info('[Start] epoch: %d' % epoch)
     get_logger().info('lr: %f' %
                       optimizer.state_dict()['param_groups'][0]['lr'])
-    loader.dataset.update()
+    # loader.dataset.update()
 
     if epoch < config.FREEZE_EPOCH:
         get_logger().info('freeze model parameter')
@@ -51,15 +73,17 @@ def train_one_epoch(epoch,
         label = label.to(config.DEVICE, dtype=torch.float)
 
         with torch.set_grad_enabled(True):
+            # mixed_img, label_a, label_b, lam = mixup_data(img, label, 1.0)
 
             logit = model(img)
             # print(logit.size())
             loss = criterion(logit, label)
+            # loss = mixup_criterion(criterion, logit, label_a, label_b, lam)
 
             # backward
-            # with amp.scale_loss(loss, optimizer) as scaled_loss:
-            # scaled_loss.backward()
-            loss.backward()
+            with amp.scale_loss(loss, optimizer) as scaled_loss:
+                scaled_loss.backward()
+            # loss.backward()
             if config.VIZ_GRAD and i % config.PRINT_FREQ == 0:
                 # visualize grad
                 plot_grad_flow(model.named_parameters())
@@ -132,6 +156,8 @@ def train():
     df_trn = pd.read_csv(config.TRAIN_PATH)
     df_val = pd.read_csv(config.VALID_PATH)
 
+    df_trn = df_trn[df_trn['Image'] != 'ID_a47710c4b']
+
     # visualization train set
     print(df_trn.head())
 
@@ -178,6 +204,7 @@ def train():
     train_history = {'loss': []}
     valid_history = {'loss': []}
     for epoch in range(start_epoch + 1, config.EPOCHS + 1):
+
         train_loss = train_one_epoch(
             epoch, model, train_loader, criterion, optimizer)
         train_history['loss'].append(train_loss)
@@ -209,8 +236,12 @@ def init_model():
     # model = HighResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
     model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
-    label_weight = torch.tensor([1, 1, 1, 1, 1, 2]).to(config.DEVICE, dtype=torch.float)
+    # criterion = torch.nn.BCEWithLogitsLoss()
+    label_weight = torch.tensor([1, 1, 1, 1, 1, 2]).to(
+        config.DEVICE, dtype=torch.float)
     criterion = WeightedBCE(label_weight)
+    # criterion = FocalBCELoss(
+    #    bce_weight=0.7, label_weight=label_weight, gamma=2)
     # criterion = torch.nn.BCEWithLogitsLoss()
     '''
     optimizer = torch.optim.SGD([{'params': model.parameters()}],
@@ -221,11 +252,12 @@ def init_model():
         optimizer, config.ITER_PER_CYCLE, config.MIN_LR)
     '''
     optimizer = optim.Adam([{'params': model.parameters()}], lr=config.ADAM_LR)
-    mile_stones = [30, 60]
+    mile_stones = [5, 10]
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, mile_stones, gamma=0.5, last_epoch=-1)
 
-    # model, optimizer = amp.initialize(model, optimizer, opt_level='01')
+    amp.register_float_function(torch, 'sigmoid')
+    model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
 
     return model, criterion, optimizer, scheduler
 
@@ -234,7 +266,7 @@ def reset_opt(model):
     get_logger().info('Change optimizer...')
     start_epoch = 0
     optimizer = optim.Adam([{'params': model.parameters()}], lr=config.ADAM_LR)
-    mile_stones = [30, 60]
+    mile_stones = [5, 10]
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, mile_stones, gamma=0.5, last_epoch=-1)
     '''
@@ -245,7 +277,7 @@ def reset_opt(model):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, config.ITER_PER_CYCLE, config.MIN_LR)
     '''
-    # model, optimizer = amp.initialize(model, optimizer, opt_level='01')
+    model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
 
     return start_epoch, optimizer, scheduler
 
@@ -261,8 +293,15 @@ def predict():
 
     get_logger().info('test size: %d ' % len(df_test))
 
-    test_dataset = BrainDataset(
-        df_test, config.TEST_IMG_PATH, alb_tst_trnsfms, mode='predict')
+    if config.RUN_TTA:
+        # TTA
+        test_dataset = BrainTTADataset(
+            df_test, config.TEST_IMG_PATH, alb_trn_trnsfms, mode='predict', n_tta=config.N_TTA)
+    else:
+        # No TTA
+        test_dataset = BrainDataset(
+            df_test, config.TEST_IMG_PATH, alb_tst_trnsfms, mode='predict')
+
     test_loader = DataLoader(test_dataset,
                              batch_size=config.BATCH_SIZE_TEST,
                              num_workers=config.NUM_WORKERS,
@@ -307,7 +346,17 @@ def predict_labels(model, loader):
                 logit = model(img)
                 prob = torch.sigmoid(logit)
             else:
-                raise NotImplementedError
+                # TTA: Dataset returns list of torch.Tensor
+                img_list = img
+                n_batches = img.size(0)
+                probs = torch.zeros(
+                    n_batches, 6, dtype=torch.float32).to(config.DEVICE)
+
+                for img in img_list:
+                    img = img.to(config.DEVICE)
+                    logit = model(img)
+                    probs += torch.sigmoid(logit)
+                probs /= len(img_list)
 
         prob = prob.detach().cpu().numpy().reshape(-1)
         preds.append(prob)

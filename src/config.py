@@ -10,35 +10,36 @@ TRAIN_PATH = os.path.join(INPUT, 'df_trn2.csv')
 VALID_PATH = os.path.join(INPUT, 'df_val.csv')
 TEST_PATH = os.path.join(INPUT, 'df_test.csv')
 SUBMIT_PATH = os.path.join(INPUT, 'stage_1_sample_submission.csv')
-TRAIN_IMG_PATH = os.path.join(INPUT, 'data2_512', 'stage_1_train_images')
-TEST_IMG_PATH = os.path.join(INPUT, 'data2_512', 'stage_1_test_images')
+TRAIN_IMG_PATH = os.path.join(INPUT, 'data2_512', 'stage_1_train_images_v2')
+TEST_IMG_PATH = os.path.join(INPUT, 'data2_512', 'stage_1_test_images_v2')
 
 DEVICE = torch.device("cuda:0")
 
 N_CLASSES = 2
-N_SAMPLES = 20000
-RUN_TTA = False
+N_SAMPLES = 40000
+RUN_TTA = True
+N_TTA = 4
 
 
 VALID_RATIO = 0.10
-BATCH_SIZE_TRAIN = 100
-BATCH_SIZE_TEST = 100
+BATCH_SIZE_TRAIN = 64
+BATCH_SIZE_TEST = 64
 NUM_WORKERS = 8
 PRINT_FREQ = 100
 ITER_PER_CYCLE = 30
 EPOCHS = ITER_PER_CYCLE * 4
 # EPOCHS = 200
 
-ADAM_LR = 1e-5
+ADAM_LR = 5e-5
 SGD_LR = 1e-2
 MIN_LR = 1e-3
 MOMENTUM = 0.9
 WEIGHT_DECAY = 1e-4
 
-FREEZE_EPOCH = 2
+FREEZE_EPOCH = 1
 USE_PRETRAINED = True
-RESET_OPT = False
-PRETRAIN_PATH = './models/data224/seres50/005/best_model.pth'
+RESET_OPT = True
+PRETRAIN_PATH = './models/data224/seres50/304/best_model.pth'
 
 DROPOUT_RATE = 0.2
 LATENT_DIM = 512
