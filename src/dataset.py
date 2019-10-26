@@ -183,9 +183,8 @@ class BrainDataset(Dataset):
 
 class BrainTTADataset(BrainDataset):
     def __init__(self, df, image_dir, transform, mode, n_tta):
-        super(BrainDataset, self).__init__(
-            df, image_dir, transform, mode
-        )
+        super(BrainTTADataset, self).__init__(df, image_dir, transform, mode)
+
         self.n_tta = n_tta
 
     def __getitem__(self, idx):

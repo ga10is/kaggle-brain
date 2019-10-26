@@ -348,15 +348,15 @@ def predict_labels(model, loader):
             else:
                 # TTA: Dataset returns list of torch.Tensor
                 img_list = img
-                n_batches = img.size(0)
-                probs = torch.zeros(
+                n_batches = img_list[0].size(0)
+                prob = torch.zeros(
                     n_batches, 6, dtype=torch.float32).to(config.DEVICE)
 
                 for img in img_list:
                     img = img.to(config.DEVICE)
                     logit = model(img)
-                    probs += torch.sigmoid(logit)
-                probs /= len(img_list)
+                    prob += torch.sigmoid(logit)
+                prob /= len(img_list)
 
         prob = prob.detach().cpu().numpy().reshape(-1)
         preds.append(prob)
