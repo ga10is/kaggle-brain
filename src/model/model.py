@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import pretrainedmodels
 
 from .. import config
+from .resnet_cbam import resnet50_cbam
 
 
 class ResNet(nn.Module):
@@ -107,6 +108,47 @@ class HighSEResNeXt(nn.Module):
             senet.layer1,
             senet.layer2,
             senet.layer3,
+        )
+        n_out_channels = 1024
+
+        # GeM
+        self.gem = GeM(p=3.0)
+
+        # FC
+        self.last_layer = nn.Sequential(
+            nn.Linear(n_out_channels, n_out_channels),
+            # nn.BatchNorm1d(n_out_channels),
+            # nn.ReLU(),
+            nn.Linear(n_out_channels, 6)
+        )
+
+    def forward(self, x):
+        x = self.feature(x)
+
+        # GeM
+        x = F.relu(x)
+        x = self.gem(x)
+        x = x.view(x.size(0), -1)
+        # FC
+        x = self.last_layer(x)
+
+        return x
+
+
+class HighCbamResNet(nn.Module):
+    def __init__(self, dropout_rate):
+        super(HighCbamResNet, self).__init__()
+
+        resnet = resnet50_cbam(pretrained=True)
+        # remove layer4
+        self.feature = nn.Sequential(
+            resnet.conv1,
+            resnet.bn1,
+            resnet.relu,
+            resnet.maxpool,
+            resnet.layer1,
+            resnet.layer2,
+            resnet.layer3,
         )
         n_out_channels = 1024
 

@@ -12,7 +12,7 @@ from .common.logger import get_logger
 from .common.util import str_stats
 from .helper_func import train_valid_split_v1
 from .dataset import BrainDataset, BrainTTADataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
-from .model.model import ResNet, HighResNet, HighSEResNeXt
+from .model.model import HighSEResNeXt, HighCbamResNet
 from .model.metrics import AverageMeter, weighted_log_loss_metric
 from .model.loss import WeightedBCE, FocalBCELoss
 from .model.model_util import load_checkpoint, save_checkpoint, plot_grad_flow
@@ -234,7 +234,8 @@ def init_model():
     torch.backends.cudnn.benchmark = True
     get_logger().info('Initializing classification model...')
     # model = HighResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
-    model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    # model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    model = HighCbamResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
     # criterion = torch.nn.BCEWithLogitsLoss()
     label_weight = torch.tensor([1, 1, 1, 1, 1, 2]).to(
@@ -252,7 +253,7 @@ def init_model():
         optimizer, config.ITER_PER_CYCLE, config.MIN_LR)
     '''
     optimizer = optim.Adam([{'params': model.parameters()}], lr=config.ADAM_LR)
-    mile_stones = [5, 10]
+    mile_stones = [1, 2]
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, mile_stones, gamma=0.5, last_epoch=-1)
 
@@ -266,7 +267,7 @@ def reset_opt(model):
     get_logger().info('Change optimizer...')
     start_epoch = 0
     optimizer = optim.Adam([{'params': model.parameters()}], lr=config.ADAM_LR)
-    mile_stones = [5, 10]
+    mile_stones = [1, 2]
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, mile_stones, gamma=0.5, last_epoch=-1)
     '''
