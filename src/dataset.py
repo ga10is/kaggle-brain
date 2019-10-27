@@ -100,8 +100,8 @@ class BrainDataset(Dataset):
 
         # Random Selection
         if mode == 'train':
-            # self.update()
-            self.df_selected = self.df_org
+            self.update()
+            # self.df_selected = self.df_org
         elif mode in ['valid', 'predict']:
             self.df_selected = self.df_org
         else:
@@ -162,11 +162,12 @@ class BrainDataset(Dataset):
     def update(self):
         if self.mode != 'train':
             raise ValueError('CellerDataset is not train mode.')
-        self.df_selected = self.random_selection(
-            config.N_CLASSES, config.N_SAMPLES)
-        # print(str_stats(self.df_selected['sirna']))
+        # self.df_selected = self.random_selection(
+            # config.N_CLASSES, config.N_SAMPLES)
+        self.df_selected = self.random_selection2(config.N_SAMPLES)
 
     def random_selection(self, n_classes, n_samples):
+        """select images as each category is same rate"""
         g = self.df_org.groupby('any')[self.id_name]
         selected = [np.random.choice(g.get_group(i).tolist(), n_samples, replace=False)
                     for i in range(n_classes)]
@@ -176,6 +177,12 @@ class BrainDataset(Dataset):
         df_new = df_new.merge(self.df_org, on=self.id_name, how='left')
         # shuffle
         df_new = df_new.sample(frac=1, random_state=2019)
+        get_logger().info('num of selected_images: %d' % len(df_new))
+
+        return df_new
+
+    def random_selection2(self, n_samples):
+        df_new = self.df_org.sample(n=n_samples, random_state=2019)
         get_logger().info('num of selected_images: %d' % len(df_new))
 
         return df_new

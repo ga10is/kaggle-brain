@@ -12,7 +12,7 @@ from .common.logger import get_logger
 from .common.util import str_stats
 from .helper_func import train_valid_split_v1
 from .dataset import BrainDataset, BrainTTADataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
-from .model.model import HighSEResNeXt, HighCbamResNet
+from .model.model import HighSEResNeXt, HighCbamResNet, HighSEResNeXt2
 from .model.metrics import AverageMeter, weighted_log_loss_metric
 from .model.loss import WeightedBCE, FocalBCELoss
 from .model.model_util import load_checkpoint, save_checkpoint, plot_grad_flow
@@ -50,7 +50,7 @@ def train_one_epoch(epoch,
     get_logger().info('[Start] epoch: %d' % epoch)
     get_logger().info('lr: %f' %
                       optimizer.state_dict()['param_groups'][0]['lr'])
-    # loader.dataset.update()
+    loader.dataset.update()
 
     if epoch < config.FREEZE_EPOCH:
         get_logger().info('freeze model parameter')
@@ -234,8 +234,9 @@ def init_model():
     torch.backends.cudnn.benchmark = True
     get_logger().info('Initializing classification model...')
     # model = HighResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
-    # model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
-    model = HighCbamResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    # model = HighSEResNeXt2(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    # model = HighCbamResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
     # criterion = torch.nn.BCEWithLogitsLoss()
     label_weight = torch.tensor([1, 1, 1, 1, 1, 2]).to(

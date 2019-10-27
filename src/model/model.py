@@ -135,6 +135,49 @@ class HighSEResNeXt(nn.Module):
         return x
 
 
+class HighSEResNeXt2(nn.Module):
+    """The model has 2 blocks of 4 resual blocks"""
+
+    def __init__(self, dropout_rate):
+        super(HighSEResNeXt2, self).__init__()
+
+        senet = pretrainedmodels.__dict__['se_resnext50_32x4d'](
+            num_classes=1000, pretrained='imagenet')
+        # remove layer4
+        self.feature = nn.Sequential(
+            senet.layer0,
+            senet.layer1,
+            senet.layer2,
+            senet.layer3,
+            senet.layer4,
+        )
+        n_out_channels = 2048
+
+        # GeM
+        self.gem = GeM(p=3.0)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+
+        # FC
+        self.last_layer = nn.Sequential(
+            nn.Linear(n_out_channels * 3, n_out_channels),
+            nn.Dropout(p=0.5),
+            nn.Linear(n_out_channels, 6)
+        )
+
+    def forward(self, x):
+        x = self.feature(x)
+
+        # GeM
+        x = F.relu(x)
+        x = torch.cat([self.avg_pool(x), self.gem(x), self.max_pool(x)], dim=1)
+        x = x.view(x.size(0), -1)
+        # FC
+        x = self.last_layer(x)
+
+        return x
+
+
 class HighCbamResNet(nn.Module):
     def __init__(self, dropout_rate):
         super(HighCbamResNet, self).__init__()

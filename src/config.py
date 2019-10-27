@@ -1,9 +1,9 @@
 import os
 import torch
 
-IMG_SIZE = (256, 256)
-INPUT_SIZE = (224, 224)
-TEST_INPUT_SIZE = (224, 224)
+IMG_SIZE = (512, 512)
+INPUT_SIZE = (448, 448)
+TEST_INPUT_SIZE = (448, 448)
 
 INPUT = './data/'
 TRAIN_PATH = os.path.join(INPUT, 'df_trn2.csv')
@@ -16,21 +16,21 @@ TEST_IMG_PATH = os.path.join(INPUT, 'data2_512', 'stage_1_test_images_v2')
 DEVICE = torch.device("cuda:0")
 
 N_CLASSES = 2
-N_SAMPLES = 40000
+N_SAMPLES = 100000
 RUN_TTA = True
 N_TTA = 4
 
 
 VALID_RATIO = 0.10
-BATCH_SIZE_TRAIN = 64
-BATCH_SIZE_TEST = 128
+BATCH_SIZE_TRAIN = 32
+BATCH_SIZE_TEST = 32
 NUM_WORKERS = 8
 PRINT_FREQ = 100
 ITER_PER_CYCLE = 30
 EPOCHS = ITER_PER_CYCLE * 4
 # EPOCHS = 200
 
-ADAM_LR = 2.5e-5
+ADAM_LR = 5e-5
 SGD_LR = 1e-2
 MIN_LR = 1e-3
 MOMENTUM = 0.9
@@ -39,7 +39,7 @@ WEIGHT_DECAY = 1e-4
 FREEZE_EPOCH = 1
 USE_PRETRAINED = True
 RESET_OPT = True
-PRETRAIN_PATH = './models/data224/cbam_resnet50/001/best_model.pth'
+PRETRAIN_PATH = './models/data512/seres50/001/best_model.pth'
 
 DROPOUT_RATE = 0.2
 LATENT_DIM = 512
