@@ -7,6 +7,7 @@ import cv2
 import albumentations as A
 import albumentations.pytorch as ATorch
 from albumentations import ImageOnlyTransform
+import pydicom
 
 import torch
 from torch.utils.data import Dataset
@@ -135,7 +136,8 @@ class BrainDataset(Dataset):
         rcd = df.iloc[idx]
         image_id = rcd['Image']
 
-        file_name = '%s.jpg' % image_id
+        # file_name = '%s.jpg' % image_id
+        file_name = '%s.dcm' % image_id
         file_path = os.path.join(self.image_dir, file_name)
         return file_path
 
@@ -147,11 +149,9 @@ class BrainDataset(Dataset):
             image file path
         """
         # image = cv2.imread(image_path)
-        image = jpeg4py.JPEG(image_path).decode()
-        # load image as 1 channel
-        # image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-        # to 3 channels
-        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # image = jpeg4py.JPEG(image_path).decode()
+        image = read_dicom(image_path)
+
         if image is None:
             raise ValueError('Not found image: %s' % image_path)
 
@@ -214,3 +214,53 @@ class BrainTTADataset(BrainDataset):
         label = -1
 
         return images, torch.tensor(label)
+
+
+WINDOW_LIST = [
+    (40, 80),
+    (80, 200),
+    (40, 380)
+]
+
+
+def read_dicom(image_path):
+    data = pydicom.read_file(image_path)
+    image = data.pixel_array
+    window_center, window_width, intercept, slope = get_windowing(data)
+
+    windowed_images = []
+    for window_center, window_width in WINDOW_LIST:
+        image_windowed = window_image(
+            image, window_center, window_width, intercept, slope)
+        windowed_images.append(image_windowed)
+    windowed_images = np.stack(windowed_images, axis=2)
+
+    return windowed_images
+
+
+def get_first_of_dicom_field_as_int(x):
+    # get x[0] as in int is x is a 'pydicom.multival.MultiValue', otherwise get int(x)
+    if type(x) == pydicom.multival.MultiValue:
+        return int(x[0])
+    else:
+        return int(x)
+
+
+def get_windowing(data):
+    dicom_fields = [data[('0028', '1050')].value,  # window center
+                    data[('0028', '1051')].value,  # window width
+                    data[('0028', '1052')].value,  # intercept
+                    data[('0028', '1053')].value]  # slope
+    return [get_first_of_dicom_field_as_int(x) for x in dicom_fields]
+
+
+def window_image(img, window_center, window_width, intercept, slope):
+    img = (img * slope + intercept)
+    img_min = window_center - window_width // 2
+    img_max = window_center + window_width // 2
+    img[img < img_min] = img_min
+    img[img > img_max] = img_max
+
+    img = (img - img_min) / (img_max - img_min)
+    img_float32 = img.astype(np.float32)
+    return img_float32

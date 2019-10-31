@@ -1,17 +1,18 @@
 import os
 import torch
 
-IMG_SIZE = (512, 512)
-INPUT_SIZE = (448, 448)
-TEST_INPUT_SIZE = (448, 448)
+IMG_SIZE = (256, 256)
+INPUT_SIZE = (224, 224)
+TEST_INPUT_SIZE = (224, 224)
 
 INPUT = './data/'
+INPUT_MNT = '/disk-brain/data'
 TRAIN_PATH = os.path.join(INPUT, 'df_trn2.csv')
 VALID_PATH = os.path.join(INPUT, 'df_val.csv')
 TEST_PATH = os.path.join(INPUT, 'df_test.csv')
 SUBMIT_PATH = os.path.join(INPUT, 'stage_1_sample_submission.csv')
-TRAIN_IMG_PATH = os.path.join(INPUT, 'data2_512', 'stage_1_train_images_v2')
-TEST_IMG_PATH = os.path.join(INPUT, 'data2_512', 'stage_1_test_images_v2')
+TRAIN_IMG_PATH = os.path.join(INPUT_MNT, 'raw', 'stage_1_train_images')
+TEST_IMG_PATH = os.path.join(INPUT_MNT, 'data2_512', 'stage_1_test_images_v2')
 
 DEVICE = torch.device("cuda:0")
 
@@ -39,7 +40,7 @@ WEIGHT_DECAY = 1e-4
 FREEZE_EPOCH = 1
 USE_PRETRAINED = True
 RESET_OPT = True
-PRETRAIN_PATH = './models/data512/seres50/001/best_model.pth'
+PRETRAIN_PATH = './models/data224/seres50/306/best_model.pth'
 
 DROPOUT_RATE = 0.2
 LATENT_DIM = 512
