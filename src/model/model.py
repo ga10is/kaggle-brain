@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pretrainedmodels
 
-from .. import config
-from .resnet_cbam import resnet50_cbam
+# from .resnet_cbam import resnet50_cbam
+from .cbam.model_resnet import ResidualNet
 
 
 class ResNet(nn.Module):
@@ -183,7 +183,8 @@ class HighCbamResNet(nn.Module):
     def __init__(self, dropout_rate):
         super(HighCbamResNet, self).__init__()
 
-        resnet = resnet50_cbam(pretrained=True)
+        # resnet = resnet50_cbam(pretrained=True)
+        resnet = ResidualNet('ImageNet', 50, 1, 'CBAM')
         # remove layer4
         self.feature = nn.Sequential(
             resnet.conv1,
