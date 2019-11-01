@@ -136,8 +136,10 @@ class BrainDataset(Dataset):
         rcd = df.iloc[idx]
         image_id = rcd['Image']
 
-        # file_name = '%s.jpg' % image_id
-        file_name = '%s.dcm' % image_id
+        if config.USE_DCM:
+            file_name = '%s.dcm' % image_id
+        else:
+            file_name = '%s.jpg' % image_id
         file_path = os.path.join(self.image_dir, file_name)
         return file_path
 
@@ -149,8 +151,10 @@ class BrainDataset(Dataset):
             image file path
         """
         # image = cv2.imread(image_path)
-        # image = jpeg4py.JPEG(image_path).decode()
-        image = read_dicom(image_path)
+        if config.USE_DCM:
+            image = read_dicom(image_path)
+        else:
+            image = jpeg4py.JPEG(image_path).decode()
 
         if image is None:
             raise ValueError('Not found image: %s' % image_path)
@@ -222,19 +226,31 @@ WINDOW_LIST = [
     (40, 380)
 ]
 
+WINDOW_MIN_MAX_LIST = [
+    (0, 80),
+    (-20, 180),
+    (-150, 230)
+]
+
 
 def read_dicom(image_path):
     data = pydicom.read_file(image_path)
     image = data.pixel_array
     window_center, window_width, intercept, slope = get_windowing(data)
+    image = (image * slope + intercept)
 
+    '''
     windowed_images = []
     for window_center, window_width in WINDOW_LIST:
-        image_windowed = window_image(
-            image, window_center, window_width, intercept, slope)
+        image_windowed = window_image_no_slope(
+            image, window_center, window_width)
         windowed_images.append(image_windowed)
+    '''
+    windowed_images = [window_image_light(
+        image, win_center, win_width) for win_center, win_width in WINDOW_MIN_MAX_LIST]
     windowed_images = np.stack(windowed_images, axis=2)
 
+    windowed_images = windowed_images.astype(np.float32)
     return windowed_images
 
 
@@ -262,5 +278,15 @@ def window_image(img, window_center, window_width, intercept, slope):
     img[img > img_max] = img_max
 
     img = (img - img_min) / (img_max - img_min)
-    img_float32 = img.astype(np.float32)
-    return img_float32
+
+    return img
+
+
+def window_image_light(img_org, img_min, img_max):
+    img = img_org.copy()
+    img[img < img_min] = img_min
+    img[img > img_max] = img_max
+
+    img = (img - img_min) / (img_max - img_min)
+
+    return img

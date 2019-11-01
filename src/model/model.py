@@ -156,11 +156,11 @@ class HighSEResNeXt2(nn.Module):
         # GeM
         self.gem = GeM(p=3.0)
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        # self.max_pool = nn.AdaptiveMaxPool2d(1)
 
         # FC
         self.last_layer = nn.Sequential(
-            nn.Linear(n_out_channels * 3, n_out_channels),
+            nn.Linear(n_out_channels * 2, n_out_channels),
             nn.Dropout(p=0.5),
             nn.Linear(n_out_channels, 6)
         )
@@ -170,7 +170,8 @@ class HighSEResNeXt2(nn.Module):
 
         # GeM
         x = F.relu(x)
-        x = torch.cat([self.avg_pool(x), self.gem(x), self.max_pool(x)], dim=1)
+        # x = torch.cat([self.avg_pool(x), self.gem(x), self.max_pool(x)], dim=1)
+        x = torch.cat([self.avg_pool(x), self.gem(x)], dim=1)
         x = x.view(x.size(0), -1)
         # FC
         x = self.last_layer(x)
@@ -203,6 +204,7 @@ class HighCbamResNet(nn.Module):
             nn.Linear(n_out_channels, n_out_channels),
             # nn.BatchNorm1d(n_out_channels),
             # nn.ReLU(),
+            nn.Dropout(p=0.5),
             nn.Linear(n_out_channels, 6)
         )
 

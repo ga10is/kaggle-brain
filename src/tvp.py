@@ -104,7 +104,7 @@ def train_one_epoch(epoch,
 
     get_logger().info("Epoch %d/%d train loss %f" %
                       (epoch, config.EPOCHS, loss_meter.avg))
-    get_logger().info('GeM p: %f' % model.gem.p.item())
+    # get_logger().info('GeM p: %f' % model.gem.p.item())
     return loss_meter.avg
 
 
@@ -234,9 +234,9 @@ def init_model():
     torch.backends.cudnn.benchmark = True
     get_logger().info('Initializing classification model...')
     # model = HighResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
-    model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    # model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
     # model = HighSEResNeXt2(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
-    # model = HighCbamResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    model = HighCbamResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
     # criterion = torch.nn.BCEWithLogitsLoss()
     label_weight = torch.tensor([1, 1, 1, 1, 1, 2]).to(
