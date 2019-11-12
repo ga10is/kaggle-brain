@@ -1,8 +1,9 @@
+import os
+
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn.functional as F
 from torch import optim
 from torch.utils.data import DataLoader
 from apex import amp
@@ -10,12 +11,12 @@ from apex import amp
 from . import config
 from .common.logger import get_logger
 from .common.util import str_stats
-from .helper_func import train_valid_split_v1
 from .dataset import BrainDataset, BrainTTADataset, alb_trn_trnsfms, alb_val_trnsfms, alb_tst_trnsfms
 from .model.model import HighSEResNeXt, HighCbamResNet, HighSEResNeXt2
 from .model.metrics import AverageMeter, weighted_log_loss_metric
-from .model.loss import WeightedBCE, FocalBCELoss
+from .model.loss import WeightedBCE
 from .model.model_util import load_checkpoint, save_checkpoint, plot_grad_flow
+from .db.mstory import ModelDB
 
 
 def mixup_data(x, y, alpha=1.0, use_cuda=True):
@@ -44,12 +45,15 @@ def train_one_epoch(epoch,
                     model,
                     loader,
                     criterion,
-                    optimizer):
+                    optimizer,
+                    db):
     loss_meter = AverageMeter()
+    lr = optimizer.state_dict()['param_groups'][0]['lr']
 
     get_logger().info('[Start] epoch: %d' % epoch)
-    get_logger().info('lr: %f' %
-                      optimizer.state_dict()['param_groups'][0]['lr'])
+    get_logger().info('lr: %f' % lr)
+
+    # update dataset
     loader.dataset.update()
 
     if epoch < config.FREEZE_EPOCH:
@@ -64,6 +68,11 @@ def train_one_epoch(epoch,
         for name, child in model.named_children():
             for param in child.parameters():
                 param.requires_grad = True
+
+    # free last Linear layer
+    for param in model.last_layer[-1].parameters():
+        print('freeze last layer')
+        param.requires_grad = False
 
     # train phase
     model.train()
@@ -102,16 +111,20 @@ def train_one_epoch(epoch,
             get_logger().info('train: %d loss: %f (just now)' % (i, loss_meter.val))
             get_logger().info('train: %d loss: %f' % (i, loss_meter.avg))
 
+            db.record_history(epoch, i, 'train', img.size(
+                0), lr, loss_meter.avg, loss_meter.avg)
+
     get_logger().info("Epoch %d/%d train loss %f" %
                       (epoch, config.EPOCHS, loss_meter.avg))
-    # get_logger().info('GeM p: %f' % model.gem.p.item())
+
     return loss_meter.avg
 
 
 def validate_one_epoch(epoch,
                        model,
                        loader,
-                       criterion):
+                       criterion,
+                       db):
     loss_meter = AverageMeter()
     log_loss_meter = AverageMeter()
 
@@ -142,6 +155,9 @@ def validate_one_epoch(epoch,
                               (i, loss_meter.val, log_loss_meter.val))
             get_logger().info('valid: %d loss: %f metric: %f' %
                               (i, loss_meter.avg, log_loss_meter.avg))
+            db.record_history(epoch, iter, 'valid', img.size(
+                0), 0, loss_meter.avg, log_loss_meter.avg)
+
     get_logger().info("Epoch %d/%d valid loss %f valid metric %f" %
                       (epoch, config.EPOCHS, loss_meter.avg, log_loss_meter.avg))
 
@@ -199,6 +215,10 @@ def train():
             # reset optimizer
             start_epoch, optimizer, scheduler = reset_opt(model)
 
+    # record model
+    db = ModelDB(config.DB_PATH)
+    db.record_model(model, os.path.join(config.OUTDIR_PATH, 'best_model.pth'))
+
     get_logger().info('[Start] Training')
     best_score = 1e+8
     train_history = {'loss': []}
@@ -206,7 +226,7 @@ def train():
     for epoch in range(start_epoch + 1, config.EPOCHS + 1):
 
         train_loss = train_one_epoch(
-            epoch, model, train_loader, criterion, optimizer)
+            epoch, model, train_loader, criterion, optimizer, db)
         train_history['loss'].append(train_loss)
 
         if epoch % 1 == 0:
@@ -223,7 +243,7 @@ def train():
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
-            }, is_best)
+            }, is_best, config.OUTDIR_PATH)
         # move scheduler.step to here
         scheduler.step()
 
@@ -234,9 +254,9 @@ def init_model():
     torch.backends.cudnn.benchmark = True
     get_logger().info('Initializing classification model...')
     # model = HighResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
-    # model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    model = HighSEResNeXt(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
     # model = HighSEResNeXt2(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
-    model = HighCbamResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
+    # model = HighCbamResNet(dropout_rate=config.DROPOUT_RATE).to(config.DEVICE)
 
     # criterion = torch.nn.BCEWithLogitsLoss()
     label_weight = torch.tensor([1, 1, 1, 1, 1, 2]).to(
@@ -268,7 +288,7 @@ def reset_opt(model):
     get_logger().info('Change optimizer...')
     start_epoch = 0
     optimizer = optim.Adam([{'params': model.parameters()}], lr=config.ADAM_LR)
-    mile_stones = [1, 2]
+    mile_stones = [5, 10]
     scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer, mile_stones, gamma=0.5, last_epoch=-1)
     '''

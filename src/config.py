@@ -18,8 +18,12 @@ USE_DCM = False
 
 DEVICE = torch.device("cuda:0")
 
+# dataset
 N_CLASSES = 2
-N_SAMPLES = 100000
+RANDOM_SELECT_TYPE = 'diff_rate'
+N_SAMPLES = 200000
+
+# tta
 RUN_TTA = True
 N_TTA = 4
 
@@ -40,9 +44,11 @@ MOMENTUM = 0.9
 WEIGHT_DECAY = 1e-4
 
 FREEZE_EPOCH = 1
-USE_PRETRAINED = False
-RESET_OPT = False
-PRETRAIN_PATH = './models/data224/seres50/402/best_model.pth'
+USE_PRETRAINED = True
+RESET_OPT = True
+PRETRAIN_PATH = './models/data224/cbam_resnet50/103/best_model.pth'
+# PRETRAIN_PATH = './models/data224/seres50/306/best_model.pth'
+OUTDIR_PATH = './models/data224/cbam_resnet50/104/'
 
 DROPOUT_RATE = 0.2
 LATENT_DIM = 512
@@ -51,3 +57,6 @@ MARGIN = 0.5
 
 # visualize gradient flag
 VIZ_GRAD = False
+
+# model db
+DB_PATH = './models/model.db'

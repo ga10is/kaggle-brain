@@ -5,6 +5,7 @@ from tqdm import tqdm
 import pydicom
 import cv2
 import numpy as np
+import pandas as pd
 
 WINDOW_LIST = [
     (40, 80),
@@ -29,8 +30,8 @@ def get_windowing(data):
     return [get_first_of_dicom_field_as_int(x) for x in dicom_fields]
 
 
-def window_image(img, window_center, window_width, intercept, slope):
-    img = (img * slope + intercept)
+def window_image(img_org, window_center, window_width, intercept, slope):
+    img = img_org.copy()
     img_min = window_center - window_width // 2
     img_max = window_center + window_width // 2
     img[img < img_min] = img_min
@@ -56,11 +57,9 @@ def download_dicom(file_path, out_dir):
         image = data.pixel_array
         window_center, window_width, intercept, slope = get_windowing(data)
 
-        windowed_images = []
-        for window_center, window_width in WINDOW_LIST:
-            image_windowed = window_image(
-                image, window_center, window_width, intercept, slope)
-            windowed_images.append(image_windowed)
+        image = (image * slope + intercept)
+        windowed_images = [window_image(
+            image, win_center, win_width, intercept, slope)for win_center, win_width in WINDOW_LIST]
         windowed_images = np.stack(windowed_images, axis=2)
 
         cv2.imwrite(out_file_path, windowed_images)
@@ -77,9 +76,9 @@ def download_wrapper(params):
 
 
 def multi_download():
-    dir_path = './data/raw/stage_1_test_images/'
+    dir_path = '/mnt/disks/disk-brain/data/raw/stage_2_test_images/'
     file_names = os.listdir(dir_path)
-    out_dir = './data/data_512_v2/stage_1_test_images_v2'
+    out_dir = '/mnt/disks/disk-brain/data/data_512/stage_2_test_images/'
     arg_list = [(os.path.join(dir_path, file_name), out_dir)
                 for file_name in file_names]
 
@@ -95,9 +94,37 @@ def multi_download():
     print('success: %d/%d' % (success, len(results)))
 
 
+def get_patient(data):
+    dicom_fields = data[('0010', '0020')].value  # patient id
+
+    return dicom_fields
+
+
+def extract_info(file_path):
+    id, _ = os.path.splitext(os.path.basename(file_path))
+    data = pydicom.read_file(file_path)
+    patient_id = get_patient(data)
+    return id, patient_id
+
+
+def multi_create_df():
+    dir_path = '/mnt/disks/disk-brain/data/raw/stage_2_test_images/'
+    file_names = os.listdir(dir_path)
+    out_dir = '/mnt/disks/disk-brain/data/raw/'
+    arg_list = [os.path.join(dir_path, file_name) for file_name in file_names]
+
+    n_processes = multiprocessing.cpu_count()
+    with Pool(processes=n_processes) as pool:
+        imap_iter = pool.imap_unordered(extract_info, arg_list)
+        records = list(tqdm(imap_iter, total=len(arg_list)))
+    df = pd.DataFrame(records, columns=['Image', 'patient_id'])
+    df.to_csv(os.path.join(out_dir, 'df_stage2_test_patient.csv'), index=False)
+
+
 if __name__ == '__main__':
     # file_paths = os.listdir('./data/raw/stage_1_test_images/')
     # print(len(file_paths))
-    multi_download()
+    # multi_download()
+    multi_create_df()
     # file_path = './data/raw/stage_1_train_images/ID_0007d9aba.dcm'
     # download_dicom(file_path, out_dir='./')

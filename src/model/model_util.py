@@ -1,3 +1,4 @@
+import os
 import math
 import numpy as np
 import pandas as pd
@@ -10,10 +11,12 @@ except ImportError:
     print('Unable import matplotlib and seaborn')
 
 
-def save_checkpoint(state, is_best, fpath='checkpoint.pth'):
-    torch.save(state, fpath)
+def save_checkpoint(state, is_best, dir_path):
+    cp_path = os.path.join(dir_path, 'checkpoint.pth')
+    torch.save(state, cp_path)
     if is_best:
-        torch.save(state, 'best_model.pth')
+        best_path = os.path.join(dir_path, 'best_model.pth')
+        torch.save(state, best_path)
 
 
 def load_checkpoint(_model, _optimizer, _scheduler, fpath, _metric_fc=None):

@@ -166,9 +166,11 @@ class BrainDataset(Dataset):
     def update(self):
         if self.mode != 'train':
             raise ValueError('CellerDataset is not train mode.')
-        # self.df_selected = self.random_selection(
-            # config.N_CLASSES, config.N_SAMPLES)
-        self.df_selected = self.random_selection2(config.N_SAMPLES)
+        if config.RANDOM_SELECT_TYPE == 'same_rate':
+            self.df_selected = self.random_selection(
+                config.N_CLASSES, config.N_SAMPLES)
+        else:
+            self.df_selected = self.random_selection2(config.N_SAMPLES)
 
     def random_selection(self, n_classes, n_samples):
         """select images as each category is same rate"""
