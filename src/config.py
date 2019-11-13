@@ -32,7 +32,7 @@ VALID_RATIO = 0.10
 BATCH_SIZE_TRAIN = 64
 BATCH_SIZE_TEST = 64
 NUM_WORKERS = 8
-PRINT_FREQ = 100
+PRINT_FREQ = 20
 ITER_PER_CYCLE = 30
 EPOCHS = ITER_PER_CYCLE * 4
 # EPOCHS = 200
@@ -44,7 +44,7 @@ MOMENTUM = 0.9
 WEIGHT_DECAY = 1e-4
 
 FREEZE_EPOCH = 1
-USE_PRETRAINED = True
+USE_PRETRAINED = False
 RESET_OPT = True
 PRETRAIN_PATH = './models/data224/cbam_resnet50/103/best_model.pth'
 # PRETRAIN_PATH = './models/data224/seres50/306/best_model.pth'
@@ -56,7 +56,7 @@ TEMPERATURE = 60
 MARGIN = 0.5
 
 # visualize gradient flag
-VIZ_GRAD = False
+VIZ_GRAD = True
 
 # model db
 DB_PATH = './models/model.db'

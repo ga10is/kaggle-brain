@@ -151,7 +151,7 @@ class ModelDB:
                               'exid', 'time', 'name', 'path'])
             return df
 
-    def table_history(self):
+    def table_history(self, n):
         with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
             cursor = con.cursor()
             sql = 'select time, exid, epoch, iter, mode, batch_size, lr, loss, metrics from history'
@@ -205,7 +205,6 @@ def calc_grad(model):
     max_abs_grads = []
     for n, p in model.named_parameters():
         if (p.grad is not None) and ('bias' not in n):
-            print(n, p)
             layers.append(n)
             avg_abs_grads.append(p.grad.abs().mean().item())
             max_abs_grads.append(p.grad.abs().max().item())

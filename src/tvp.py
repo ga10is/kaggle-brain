@@ -70,9 +70,9 @@ def train_one_epoch(epoch,
                 param.requires_grad = True
 
     # free last Linear layer
-    for param in model.last_layer[-1].parameters():
-        print('freeze last layer')
-        param.requires_grad = False
+    # for param in model.last_layer[-1].parameters():
+        # print('freeze last layer')
+        # param.requires_grad = False
 
     # train phase
     model.train()
@@ -95,7 +95,8 @@ def train_one_epoch(epoch,
             # loss.backward()
             if config.VIZ_GRAD and i % config.PRINT_FREQ == 0:
                 # visualize grad
-                plot_grad_flow(model.named_parameters())
+                # plot_grad_flow(model.named_parameters())
+                db.rec_grad(model, epoch, i)
 
             optimizer.step()
             optimizer.zero_grad()
@@ -231,7 +232,7 @@ def train():
 
         if epoch % 1 == 0:
             valid_loss = validate_one_epoch(
-                epoch, model, valid_loader, criterion)
+                epoch, model, valid_loader, criterion, db)
             valid_history['loss'].append(valid_loss)
 
             is_best = valid_loss < best_score
