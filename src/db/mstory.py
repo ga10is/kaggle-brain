@@ -6,6 +6,7 @@ import textwrap
 import json
 import pandas as pd
 import numpy as np
+import datetime
 
 try:
     import matplotlib.pylab as plt
@@ -20,6 +21,7 @@ def create_table(dbfile):
         sql = textwrap.dedent('''\
             create table experiment (
             exid integer primary key autoincrement,
+            time timestamp,
             name text,
             arch text,
             path text
@@ -32,6 +34,7 @@ def create_table(dbfile):
         sql = textwrap.dedent('''\
             create table history (
             hid integer primary key autoincrement,
+            time timestamp,
             exid integer,
             epoch integer,
             iter integer,
@@ -69,6 +72,7 @@ class ModelDB:
     - experiment table: the table which records model name, architecture and model path.
     - history table: the table which records loss, metrics, lr, batch size, etc. for each iteration.
     """
+    time_setting = sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
 
     def __init__(self, dbfile):
         """
@@ -87,59 +91,76 @@ class ModelDB:
         # experiment id: primary key of experiment table
         self.ex_id = 'no_exid'
 
-    def record_model(self, model, model_path):
+    def rec_model(self, model, model_path):
         """
-        write model information to model table.
+        write model information to experiment table.
 
         Paramters
         ---------
         model: torch.nn.Module
         """
-        with closing(sqlite3.connect(self.dbfile)) as con:
+        with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
             cursor = con.cursor()
 
-            sql = 'insert into experiment(name, arch, path) values(?, ?, ?)'
+            sql = 'insert into experiment(time, name, arch, path) values(?, ?, ?, ?)'
             model_name = model.__class__.__name__
             architecture = str(model)
             # self.model_id = hashlib.md5(architecture.encode()).hexdigest()
-            data = (model_name, architecture, model_path)
+            now = datetime.datetime.now()
+            data = (now, model_name, architecture, model_path)
 
             cursor.execute(sql, data)
             self.ex_id = cursor.lastrowid
 
             con.commit()
 
-    def record_history(self, epoch, iter, mode, batch_size, lr, loss_val, metrics_val):
+    def rec_history(self, epoch, iter, mode, batch_size, lr, loss_val, metrics_val):
         """
         Record loss and metrics for a iteration.
         """
-        with closing(sqlite3.connect(self.dbfile)) as con:
+        with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
             cursor = con.cursor()
-            sql = 'insert into history(exid, epoch, iter, mode, batch_size, lr, loss, metrics) values(?, ?, ?, ?, ?, ?, ?, ?)'
-            data = (self.ex_id, epoch, iter, mode,
+            sql = 'insert into history(time, exid, epoch, iter, mode, batch_size, lr, loss, metrics) values(?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            now = datetime.datetime.now()
+            data = (now, self.ex_id, epoch, iter, mode,
                     batch_size, lr, loss_val, metrics_val)
             cursor.execute(sql, data)
             con.commit()
 
-    def record_grad(self, epoch, iter, layer_grads):
+    def rec_grad(self, model, epoch, iter):
+        layer_grads = calc_grad(model)
+        layer_grads_str = json.dumps(layer_grads)
+
         with closing(sqlite3.connect(self.dbfile)) as con:
             cursor = con.cursor()
 
             sql = 'insert into grad(exid, epoch, iter, layer_grad) values(?, ?, ?, ?)'
-            data = (self.ex_id, epoch, iter, (layer_grads))
+            data = (self.ex_id, epoch, iter, (layer_grads_str))
 
             cursor.execute(sql, data)
             con.commit()
 
-    def show_experiment(self):
-        with closing(sqlite3.connect(self.dbfile)) as con:
+    def table_experiment(self):
+        with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
             cursor = con.cursor()
-            sql = 'select exid, name, path from experiment'
+            sql = 'select exid, time, name, path from experiment'
             cursor.execute(sql)
 
             records = cursor.fetchall()
-            df = pd.DataFrame(records, columns=['exid', 'name', 'path'])
-            print(df)
+            df = pd.DataFrame(records, columns=[
+                              'exid', 'time', 'name', 'path'])
+            return df
+
+    def table_history(self):
+        with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
+            cursor = con.cursor()
+            sql = 'select time, exid, epoch, iter, mode, batch_size, lr, loss, metrics from history'
+            cursor.execute(sql)
+
+            records = cursor.fetchall()
+            df = pd.DataFrame(records, columns=[
+                              'time', 'exid', 'epoch', 'iter', 'mode', 'batch_size', 'lr', 'loss', 'metrics'])
+            return df
 
     def get_grad(self, exid, epoch, iter):
         with closing(sqlite3.connect(self.dbfile)) as con:
@@ -159,17 +180,23 @@ class ModelDB:
 
 
 class GradPlot:
-
-    def plot_grad(self, layer_grad, figsize=(16, 6)):
+    @classmethod
+    def plot_grad(cls, layer_grad, figsize=(16, 6)):
         max_grad = layer_grad['max_abs_grads']
         avg_grad = layer_grad['avg_abs_grads']
         layers = layer_grad['layers']
 
         # fig, ax = plt.subplots(1, 1)
         plt.figure(figsize=figsize)
-        plt.bar(np.arange(len(max_grad), max_grad, alpha=0.1, lw=1, color='c'))
-        plt.bar(np.arange(len(max_grad), avg_grad, alpha=0.1, lw=1, color='b'))
+        plt.bar(np.arange(len(max_grad)), max_grad, alpha=0.1, lw=1, color='c')
+        plt.bar(np.arange(len(max_grad)), avg_grad, alpha=0.1, lw=1, color='b')
         plt.xticks(range(0, len(layers), 1), layers, rotation='vertical')
+        plt.xlim(left=-1, right=len(layers))
+        plt.xlabel("Layers")
+        plt.ylabel("Gradient Magnitude")
+        plt.yscale('log')
+        plt.title("Gradient flow")
+        plt.grid(True)
 
 
 def calc_grad(model):
@@ -177,10 +204,11 @@ def calc_grad(model):
     avg_abs_grads = []
     max_abs_grads = []
     for n, p in model.named_parameters():
-        print(n, p)
-        layers.append(n)
-        avg_abs_grads.append(p.grad.abs().mean().item())
-        max_abs_grads.append(p.grad.abs().max().item())
+        if (p.grad is not None) and ('bias' not in n):
+            print(n, p)
+            layers.append(n)
+            avg_abs_grads.append(p.grad.abs().mean().item())
+            max_abs_grads.append(p.grad.abs().max().item())
 
     layer_grads = {
         'layers': layers,
@@ -220,11 +248,12 @@ if __name__ == '__main__':
     loss = loss(logit, label)
     loss.backward()
 
-    lg = calc_grad(net)
-    db.record_model(net, './model/data224/mynet/001/best_model.pth')
+    db.rec_model(net, './model/data224/mynet/001/best_model.pth')
     print('exid: %d' % db.ex_id)
 
-    db.record_grad(1, 0, json.dumps(lg))
+    db.rec_grad(net, 1, 0)
 
     print(db.get_grad(3, 1, 0))
-    db.show_experiment()
+    df_ex = db.table_experiment()
+    print(df_ex)
+    print(df_ex.dtypes)

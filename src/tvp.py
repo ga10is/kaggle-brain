@@ -111,7 +111,7 @@ def train_one_epoch(epoch,
             get_logger().info('train: %d loss: %f (just now)' % (i, loss_meter.val))
             get_logger().info('train: %d loss: %f' % (i, loss_meter.avg))
 
-            db.record_history(epoch, i, 'train', img.size(
+            db.rec_history(epoch, i, 'train', img.size(
                 0), lr, loss_meter.avg, loss_meter.avg)
 
     get_logger().info("Epoch %d/%d train loss %f" %
@@ -155,7 +155,7 @@ def validate_one_epoch(epoch,
                               (i, loss_meter.val, log_loss_meter.val))
             get_logger().info('valid: %d loss: %f metric: %f' %
                               (i, loss_meter.avg, log_loss_meter.avg))
-            db.record_history(epoch, iter, 'valid', img.size(
+            db.rec_history(epoch, iter, 'valid', img.size(
                 0), 0, loss_meter.avg, log_loss_meter.avg)
 
     get_logger().info("Epoch %d/%d valid loss %f valid metric %f" %
@@ -217,7 +217,7 @@ def train():
 
     # record model
     db = ModelDB(config.DB_PATH)
-    db.record_model(model, os.path.join(config.OUTDIR_PATH, 'best_model.pth'))
+    db.rec_model(model, os.path.join(config.OUTDIR_PATH, 'best_model.pth'))
 
     get_logger().info('[Start] Training')
     best_score = 1e+8
