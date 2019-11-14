@@ -141,26 +141,10 @@ class ModelDB:
             con.commit()
 
     def table_experiment(self):
-        with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
-            cursor = con.cursor()
-            sql = 'select exid, time, name, path from experiment'
-            cursor.execute(sql)
+        return ExperimentTable(self.dbfile)
 
-            records = cursor.fetchall()
-            df = pd.DataFrame(records, columns=[
-                              'exid', 'time', 'name', 'path'])
-            return df
-
-    def table_history(self, n):
-        with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
-            cursor = con.cursor()
-            sql = 'select time, exid, epoch, iter, mode, batch_size, lr, loss, metrics from history'
-            cursor.execute(sql)
-
-            records = cursor.fetchall()
-            df = pd.DataFrame(records, columns=[
-                              'time', 'exid', 'epoch', 'iter', 'mode', 'batch_size', 'lr', 'loss', 'metrics'])
-            return df
+    def table_history(self):
+        return HistoryTable(self.dbfile)
 
     def get_grad(self, exid, epoch, iter):
         with closing(sqlite3.connect(self.dbfile)) as con:
@@ -177,6 +161,96 @@ class ModelDB:
                 layer_grad = json.loads(layer_grad_str)
 
         return layer_grad
+
+
+class TableBinder:
+    """
+    This class binds sqlite db and provide interfaces like pandas.DataFrame.
+
+    Usage
+    -----
+    Subclass of this class must be implemented `select` method.
+    """
+
+    def __init__(self):
+        pass
+
+    def __getitem__(self, i):
+        if type(i) == int:
+            return self.select(i, 1)
+        elif type(i) == slice:
+            if i.step is None:
+                offset = i.start
+                limit = i.stop - i.start
+                return self.select(offset, limit)
+            else:
+                raise IndexError('Unsupport select way')
+        else:
+            raise IndexError('Unsupport select way')
+
+    def show(self):
+        return self.select(-1, -1)
+
+    def head(self, n=5):
+        return self.__getitem__(slice(0, n))
+
+    def tail(self, n=5):
+        return self.__getitem__(slice(-n, None))
+
+    def select(self, offset, limit):
+        raise NotImplementedError
+
+
+class ExperimentTable(TableBinder):
+
+    time_setting = sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+
+    def __init__(self, dbfile):
+        self.dbfile = dbfile
+
+    def select(self, offset, limit):
+        with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
+            cursor = con.cursor()
+            if offset < 0 or limit < 0:
+                # select all
+                sql = 'select exid, time, name, path from experiment'
+                cursor.execute(sql)
+            else:
+                sql = 'select exid, time, name, path from experiment '\
+                    'limit ? offset ?'
+                data = (limit, offset)
+                cursor.execute(sql, data)
+
+            records = cursor.fetchall()
+            df = pd.DataFrame(records, columns=[
+                              'exid', 'time', 'name', 'path'])
+            return df
+
+
+class HistoryTable(TableBinder):
+
+    time_setting = sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+
+    def __init__(self, dbfile):
+        self.dbfile = dbfile
+
+    def select(self, offset, limit):
+        with closing(sqlite3.connect(self.dbfile, detect_types=self.time_setting)) as con:
+            cursor = con.cursor()
+            if offset < 0 or limit < 0:
+                # select all
+                sql = 'select time, exid, epoch, iter, mode, batch_size, lr, loss, metrics from history'
+                cursor.execute(sql)
+            else:
+                sql = 'select time, exid, epoch, iter, mode, batch_size, lr, loss, metrics from history '\
+                    'limit ? offset ?'
+                data = (limit, offset)
+                cursor.execute(sql, data)
+
+            records = cursor.fetchall()
+            df = pd.DataFrame(records, columns=[
+                              'time', 'exid', 'epoch', 'iter', 'mode', 'batch_size', 'lr', 'loss', 'metrics'])
+            return df
 
 
 class GradPlot:
@@ -254,5 +328,5 @@ if __name__ == '__main__':
 
     print(db.get_grad(3, 1, 0))
     df_ex = db.table_experiment()
-    print(df_ex)
-    print(df_ex.dtypes)
+    print(df_ex.head())
+    print(df_ex[1:3])
