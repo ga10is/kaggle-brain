@@ -48,6 +48,7 @@ def create_table(dbfile):
         print(sql)
         cursor.execute(sql)
 
+        # create gradient table for observating gradient
         sql = textwrap.dedent('''\
             create table grad (
             gid integer primary key autoincrement,
@@ -55,6 +56,19 @@ def create_table(dbfile):
             epoch integer,
             iter integer,
             layer_grad blob
+            )
+            ''')
+        print(sql)
+        cursor.execute(sql)
+
+        # create loss change allocation(LCA) for observating learn of layers
+        sql = textwrap.dedent('''\
+            create table lca (
+            lid integer primary key autoincrement,
+            exid integer,
+            epoch integer,
+            iter integer,
+            layer_lca blob
             )
             ''')
         print(sql)
@@ -71,6 +85,8 @@ class ModelDB:
     The database has 2 tables.
     - experiment table: the table which records model name, architecture and model path.
     - history table: the table which records loss, metrics, lr, batch size, etc. for each iteration.
+    - gradient table: the table which records gradients of layers for each iteration.
+    - lca table: the table which records loss change allocation of layers for each iteration.
     """
     time_setting = sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
 
@@ -128,6 +144,9 @@ class ModelDB:
             con.commit()
 
     def rec_grad(self, model, epoch, iter):
+        """
+        Record gradients for a iteration.
+        """
         layer_grads = calc_grad(model)
         layer_grads_str = json.dumps(layer_grads)
 
@@ -136,6 +155,25 @@ class ModelDB:
 
             sql = 'insert into grad(exid, epoch, iter, layer_grad) values(?, ?, ?, ?)'
             data = (self.ex_id, epoch, iter, (layer_grads_str))
+
+            cursor.execute(sql, data)
+            con.commit()
+
+    def rec_lca(self, lca_dict, epoch, iter):
+        """
+        Record LCA for a iteration.
+        """
+        layer_lca = {
+            'layers': list(lca_dict.keys()),
+            'sum_lca': [lca_dict[k].sum().item() for k in lca_dict.keys()]
+        }
+        layer_lca_str = json.dumps(layer_lca)
+
+        with closing(sqlite3.connect(self.dbfile)) as con:
+            cursor = con.cursor()
+
+            sql = 'insert into lca(exid, epoch, iter, layer_lca) values(?, ?, ?, ?)'
+            data = (self.ex_id, epoch, iter, (layer_lca_str))
 
             cursor.execute(sql, data)
             con.commit()
@@ -269,6 +307,33 @@ class GradPlot:
         plt.xlabel("Layers")
         plt.ylabel("Gradient Magnitude")
         plt.yscale('log')
+        plt.title("Gradient flow")
+        plt.grid(True)
+
+    @classmethod
+    def plot_lca(cls, layer_lca, figsize=(16, 6)):
+        """
+        Plot LCA
+
+        Parameters
+        ----------
+        layer_lca: dict
+            layer_lca has 'layers' and 'sum_lca' keys.
+            - The value of 'layers' is list of layer name.
+            - The value of 'sum_lca' is list of sum of LCA for each layer.
+        """
+        layers = layer_lca['layers']
+        sum_lca = layer_lca['sum_lca']
+
+        print(sum_lca)
+
+        plt.figure(figsize=figsize)
+        plt.bar(x=np.arange(len(layers)), height=sum_lca,
+                alpha=0.5, lw=1, color='c')
+        plt.xticks(range(0, len(layers), 1), layers, rotation='vertical')
+        plt.xlim(left=-1, right=len(layers))
+        plt.xlabel("Layers")
+        plt.ylabel("Loss Change Allocation")
         plt.title("Gradient flow")
         plt.grid(True)
 
