@@ -184,6 +184,9 @@ class ModelDB:
     def table_history(self):
         return HistoryTable(self.dbfile)
 
+    def table_lca(self):
+        return LcaTable(self.dbfile)
+
     def get_grad(self, exid, epoch, iter):
         with closing(sqlite3.connect(self.dbfile)) as con:
             cursor = con.cursor()
@@ -199,6 +202,22 @@ class ModelDB:
                 layer_grad = json.loads(layer_grad_str)
 
         return layer_grad
+
+    def get_lca(self, exid, epoch, iter):
+        with closing(sqlite3.connect(self.dbfile)) as con:
+            cursor = con.cursor()
+            sql = 'select layer_lca from lca where exid = ? and epoch = ? and iter = ?'
+            data = (exid, epoch, iter)
+            cursor.execute(sql, data)
+
+            records = cursor.fetchall()
+            if len(records) == 0:
+                raise ValueError('No records that meet the conditions')
+            else:
+                layer_lca_str, = records[0]
+                layer_lca = json.loads(layer_lca_str)
+
+        return layer_lca
 
 
 class TableBinder:
@@ -219,7 +238,11 @@ class TableBinder:
         elif type(i) == slice:
             if i.step is None:
                 offset = i.start
-                limit = i.stop - i.start
+                if i.stop is None:
+                    # case slice = [offset, None]
+                    limit = None
+                else:
+                    limit = i.stop - i.start
                 return self.select(offset, limit)
             else:
                 raise IndexError('Unsupport select way')
@@ -233,6 +256,7 @@ class TableBinder:
         return self.__getitem__(slice(0, n))
 
     def tail(self, n=5):
+        # TODO: implement
         return self.__getitem__(slice(-n, None))
 
     def select(self, offset, limit):
@@ -288,6 +312,30 @@ class HistoryTable(TableBinder):
             records = cursor.fetchall()
             df = pd.DataFrame(records, columns=[
                               'time', 'exid', 'epoch', 'iter', 'mode', 'batch_size', 'lr', 'loss', 'metrics'])
+            return df
+
+
+class LcaTable(TableBinder):
+    def __init__(self, dbfile):
+        self.dbfile = dbfile
+
+    def select(self, offset, limit):
+        with closing(sqlite3.connect(self.dbfile)) as con:
+            cursor = con.cursor()
+            if offset < 0 or limit < 0:
+                # select all
+                sql = 'select lid, exid, epoch, iter, layer_lca from lca'
+                cursor.execute(sql)
+            else:
+                sql = 'select lid, exid, epoch, iter, layer_lca from lca '\
+                    'limit ? offset ?'
+                data = (limit, offset)
+                cursor.execute(sql, data)
+
+            records = cursor.fetchall()
+            df = pd.DataFrame(records, columns=[
+                              'lid', 'exid', 'epoch', 'iter', 'layer_lca'])
+
             return df
 
 
